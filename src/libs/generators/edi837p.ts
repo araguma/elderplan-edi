@@ -1,12 +1,17 @@
 import { JSEDINotation, X12Generator } from 'node-x12'
 
+import { getCCYYMMDD, getHHMM, getYYMMDD } from '@/libs/date'
+
 export type EDI837PData = {
     insurance: {
         type: string
         id: string
     }
     patient: {
-        name: string
+        firstName: string
+        lastName: string
+        middleName: string
+        suffix: string
         birthDate: string
         gender: string
         address: string
@@ -19,16 +24,13 @@ export type EDI837PData = {
         address: string
         signature: string
     }
-    conditionRelatedTo: {
-        employment: boolean
-        autoAccident: boolean
-        otherAccident: boolean
-    }
     services: [
         {
-            date: string
+            procedure: string
             place: string
-            emg: string
+            charge: string
+            count: string
+            date: string
         },
     ]
     authorizationNumber: string
@@ -36,10 +38,14 @@ export type EDI837PData = {
     totalCharge: string
     amountPaid: string
     billingProvider: {
+        name: string
         address: string
+        city: string
+        state: string
+        zip: string
+        country: string
         phone: string
     }
-    npi: string
 }
 
 export default class EDI837P {
@@ -51,25 +57,24 @@ export default class EDI837P {
 
     serialize(): string {
         // Interchange Control Header
-        // ISA*00*          *00*          *XX*XXXXXXXXXXXXXXX*XX*XXXXXXXXXXXXXXX*240716*0316*^*00501*000000000*X*X*>~
         const document = new JSEDINotation(
             [
                 '00',
                 '',
                 '00',
                 '',
-                'XX',
-                'XXXXXXXXXXXXXXX',
-                'XX',
-                'XXXXXXXXXXXXXXX',
-                '240716',
-                '0316',
+                'ZZ',
+                this.data.federalTaxID,
+                'ZZ',
+                '316250001',
+                getYYMMDD(),
+                getHHMM(),
                 '^',
                 '00501',
-                '000000000',
-                'X',
-                'X',
-                '>',
+                '000000000', // Control Number
+                '1',
+                'T',
+                ':',
             ],
             {
                 elementDelimiter: '*',
@@ -79,207 +84,214 @@ export default class EDI837P {
         )
 
         // Functional Group Header
-        // GS*HC*XXXXX*XXX*20240716*2222*000*XX*005010X222A2~
         const group = document.addFunctionalGroup([
             'HC',
-            'XXXXX',
-            'XXX',
-            '20240716',
-            '2222',
-            '000',
-            'XX',
-            '005010X222A2',
+            this.data.federalTaxID,
+            '316250001',
+            getCCYYMMDD(),
+            getHHMM(),
+            '000', // Control Number
+            'X',
+            '005010X222A1',
         ])
 
         // Transaction Set Header
-        // ST*837*0001*005010X222A2~
         const transaction = group.addTransaction([
             '837',
-            '0001',
-            '005010X222A2',
+            '0001', // Control Number
+            '005010X222A1',
         ])
 
         // Beginning of Hierarchical Transaction
-        // BHT*0019*18*XXXX*20240716*1929*31~
         transaction.addSegment('BHT', [
             '0019',
-            '18',
-            'XXXX',
-            '20240716',
-            '1929',
-            '31',
+            '00',
+            'XXXX', // Control Number
+            getCCYYMMDD(),
+            getHHMM(),
+            'CH', // ?
         ])
 
         // [1000A] Submitter Name
-        // NM1*41*2*XX*XXX*XXXX***46*XXXX~
         transaction.addSegment('NM1', [
             '41',
             '2',
-            'XX',
-            'XXX',
-            'XXXX',
+            this.data.billingProvider.name,
+            '',
+            '',
             '',
             '',
             '46',
-            'XXXX',
+            this.data.federalTaxID,
         ])
 
         // [1000A] Submitter EDI Contact Information
-        // PER*IC*X*TE*XXXXX*EM*XX*EX*XX~
         transaction.addSegment('PER', [
             'IC',
-            'X',
+            this.data.billingProvider.name,
             'TE',
-            'XXXXX',
-            'EM',
-            'XX',
-            'EX',
-            'XX',
+            this.data.billingProvider.phone,
+            '',
+            '',
+            '',
+            '',
         ])
 
         // [1000B] Receiver Name
-        // NM1*40*2*XXXX*****46*XXXXXXX~
         transaction.addSegment('NM1', [
             '40',
             '2',
-            'XXXX',
+            'Elderplan',
+            '',
             '',
             '',
             '',
             '46',
-            'XXXXXXX',
+            '316250001',
         ])
 
         // [2000A] Hierarchical Level
-        // HL*1**20*1~
-        transaction.addSegment('HL', ['1', '', '', '20', '1'])
+        transaction.addSegment('HL', ['1', '', '20', '1'])
 
-        // Billing Provider Name
-        // NM1*85*2*XX*XXX*XX**XXX*XX*XXX~
+        // [2010AA] Billing Provider Name
         transaction.addSegment('NM1', [
             '85',
             '2',
-            'XX',
-            'XXX',
-            'XX',
+            this.data.billingProvider.name,
             '',
-            'XXX',
-            'XX',
-            'XXX',
+            '',
+            '',
+            '',
+            '',
+            '',
         ])
 
-        // Billing Provider Address
-        // N3*XXXXX*XXXXX~
-        transaction.addSegment('N3', ['XXXXX', 'XXXXX'])
+        // [2010AA] Billing Provider Address
+        transaction.addSegment('N3', [this.data.billingProvider.address, ''])
 
-        // Billing Provider City, State, ZIP Code
-        // N4*XXX*XX*XXXXXXX*XXX~
-        transaction.addSegment('N4', ['XXX', 'XX', 'XXXXXXX', 'XXX'])
+        // [2010AA] Billing Provider City, State, ZIP Code
+        transaction.addSegment('N4', [
+            this.data.billingProvider.city,
+            this.data.billingProvider.state,
+            this.data.billingProvider.zip,
+            this.data.billingProvider.country,
+            this.data.billingProvider.state,
+        ])
 
-        // Billing Provider Tax Identification
-        // REF*EI*XXXX~
-        transaction.addSegment('REF', ['EI', 'XXXX'])
+        // [2010AA] Billing Provider Tax Identification
+        transaction.addSegment('REF', ['EI', this.data.federalTaxID])
 
-        // Hierarchical Level
-        // HL*2*1*22*1~
+        // [2000B] Hierarchical Level
         transaction.addSegment('HL', ['2', '1', '22', '1'])
 
-        // Subscriber Information
-        // SBR*D*18*XXXXXX*XX*41****MB~
+        // [2000B] Subscriber Information
         transaction.addSegment('SBR', [
-            'D',
+            'D', // ?
             '18',
-            'XXXXXX',
-            'XX',
-            '41',
             '',
             '',
-            'MB',
+            '',
+            '',
+            '',
+            '',
+            this.data.insurance.type,
         ])
 
-        // Subscriber Name
-        // NM1*IL*2*XX*XX*XXX**XX*MI*XXXX~
+        // [2010BA] Subscriber Name
         transaction.addSegment('NM1', [
             'IL',
-            '2',
-            'XX',
-            'XX',
-            'XXX',
+            '1',
+            this.data.patient.lastName,
+            this.data.patient.firstName,
+            this.data.patient.middleName,
             '',
-            'XX',
+            this.data.patient.suffix,
             'MI',
-            'XXXX',
+            this.data.insurance.id,
         ])
 
-        // Payer Name
-        // NM1*PR*2*XX*****XV*XX~
-        transaction.addSegment('NM1', ['PR', '2', 'XX', '', '', '', 'XV', 'XX'])
+        // [2010BB] Payer Name
+        transaction.addSegment('NM1', [
+            'PR',
+            '2',
+            'Elderplan',
+            '',
+            '',
+            '',
+            '',
+            'PI',
+            '31625',
+        ])
 
-        // Claim Information
+        // [2300] Claim Information
         // CLM*XXXX*000000000000***X>B>X*Y*C*N*Y*P*AA>XXX>>XX>XXX*05********11~
         transaction.addSegment('CLM', [
-            'XXXX',
-            '000000000000',
+            'XXXX', // Patient Control Number
+            this.data.totalCharge,
             '',
-            'X>B>X',
-            'Y',
-            'C',
-            'N',
-            'Y',
-            'P',
-            'AA>XXX>>XX>XXX',
-            '05',
+            '',
+            '12>B>', // ?
+            'Y', // ?
+            'A', // ?
+            'Y', // ?
+            'Y', // ?
             '',
             '',
             '',
-            '11',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
         ])
 
-        // Health Care Diagnosis Code
-        // HI*BK>X*ABF>XXX*BF>XXX*BF>XX*BF>X*BF>XXXX*BF>XXX*ABF>XXXX*BF>XXX*BF>XXXX*BF>XXXXXX*BF>XXX~
+        // [2300] Prior Authorization Number
+        transaction.addSegment('REF', ['G1', this.data.authorizationNumber])
+
+        // [2300] Health Care Diagnosis Code
         transaction.addSegment('HI', [
-            'BK>X',
-            'ABF>XXX',
-            'BF>XXX',
-            'BF>XX',
-            'BF>X',
-            'BF>XXXX',
-            'BF>XXX',
-            'ABF>XXXX',
-            'BF>XXX',
-            'BF>XXXX',
-            'BF>XXXXXX',
-            'BF>XXX',
+            'BF>Z74.1',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
         ])
 
         this.data.services.forEach((service, index) => {
-            // Service Line Number
-            // LX*0~
-            transaction.addSegment('LX', [index.toString()])
+            // [2400] Service Line Number
+            transaction.addSegment('LX', [(index + 1).toString()])
 
-            // Professional Service
-            // SV1*ER>XXXXXX>XX>XX>XX>XX>XXX*000000000000000*UN*00*XX**0>0>0>0**Y**Y*Y***0~
+            // [2400] Professional Service
             transaction.addSegment('SV1', [
-                'ER>XXXXXX>XX>XX>XX>XX>XXX',
-                '000000000000000',
+                service.procedure,
+                service.charge,
                 'UN',
-                '00',
-                'XX',
-                '',
-                '0>0>0>0',
-                '',
-                'Y',
-                '',
-                'Y',
-                'Y',
+                service.count,
+                service.place,
                 '',
                 '',
-                '0',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
             ])
 
-            // Date - Service Date
-            // DTP*472*RD8*XXX~
-            transaction.addSegment('DTP', ['472', 'RD8', 'XXX'])
+            // [2400] Date - Service Date
+            transaction.addSegment('DTP', ['472', 'RD8', service.date])
         })
 
         return new X12Generator(document).toString()
