@@ -1,14 +1,45 @@
 import { JSEDINotation, X12Generator } from 'node-x12'
 
 export type EDI837PData = {
-    claimFilingIndicatorCode: string
+    insurance: {
+        type: string
+        id: string
+    }
+    patient: {
+        name: string
+        birthDate: string
+        gender: string
+        address: string
+        signature: string
+        date: string
+    }
+    insured: {
+        name: string
+        relationship: string
+        address: string
+        signature: string
+    }
+    conditionRelatedTo: {
+        employment: boolean
+        autoAccident: boolean
+        otherAccident: boolean
+    }
     services: [
         {
             date: string
             place: string
             emg: string
-        }
+        },
     ]
+    authorizationNumber: string
+    federalTaxID: string
+    totalCharge: string
+    amountPaid: string
+    billingProvider: {
+        address: string
+        phone: string
+    }
+    npi: string
 }
 
 export default class EDI837P {
@@ -79,7 +110,7 @@ export default class EDI837P {
             '31',
         ])
 
-        // Submitter Name
+        // [1000A] Submitter Name
         // NM1*41*2*XX*XXX*XXXX***46*XXXX~
         transaction.addSegment('NM1', [
             '41',
@@ -93,7 +124,7 @@ export default class EDI837P {
             'XXXX',
         ])
 
-        // Submitter EDI Contact Information
+        // [1000A] Submitter EDI Contact Information
         // PER*IC*X*TE*XXXXX*EM*XX*EX*XX~
         transaction.addSegment('PER', [
             'IC',
@@ -106,7 +137,7 @@ export default class EDI837P {
             'XX',
         ])
 
-        // Receiver Name
+        // [1000B] Receiver Name
         // NM1*40*2*XXXX*****46*XXXXXXX~
         transaction.addSegment('NM1', [
             '40',
@@ -119,7 +150,7 @@ export default class EDI837P {
             'XXXXXXX',
         ])
 
-        // Hierarchical Level
+        // [2000A] Hierarchical Level
         // HL*1**20*1~
         transaction.addSegment('HL', ['1', '', '', '20', '1'])
 
@@ -220,6 +251,36 @@ export default class EDI837P {
             'BF>XXXXXX',
             'BF>XXX',
         ])
+
+        this.data.services.forEach((service, index) => {
+            // Service Line Number
+            // LX*0~
+            transaction.addSegment('LX', [index.toString()])
+
+            // Professional Service
+            // SV1*ER>XXXXXX>XX>XX>XX>XX>XXX*000000000000000*UN*00*XX**0>0>0>0**Y**Y*Y***0~
+            transaction.addSegment('SV1', [
+                'ER>XXXXXX>XX>XX>XX>XX>XXX',
+                '000000000000000',
+                'UN',
+                '00',
+                'XX',
+                '',
+                '0>0>0>0',
+                '',
+                'Y',
+                '',
+                'Y',
+                'Y',
+                '',
+                '',
+                '0',
+            ])
+
+            // Date - Service Date
+            // DTP*472*RD8*XXX~
+            transaction.addSegment('DTP', ['472', 'RD8', 'XXX'])
+        })
 
         return new X12Generator(document).toString()
     }
