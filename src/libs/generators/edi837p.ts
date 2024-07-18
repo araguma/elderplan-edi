@@ -11,7 +11,7 @@ export type EDI837PData = {
         birthDate: Date
         gender: 'F' | 'M' | 'U'
         address: Address
-        relation: '18'
+        relationship: '18'
     }
     insured: {
         type: 'MA' | 'MB' | 'MC'
@@ -24,9 +24,9 @@ export type EDI837PData = {
     services: {
         from: Date
         to: Date
+        place: string
         procedure: string
         modifiers: string[]
-        place: string
         charge: string
         count: string
         renderingProviderId: string
@@ -52,7 +52,7 @@ export default class EDI837P {
     }
 
     serialize(): string {
-        // Interchange Control Header (Checked)
+        // Interchange Control Header
         const document = new JSEDINotation(
             [
                 '00',
@@ -76,10 +76,11 @@ export default class EDI837P {
                 elementDelimiter: '*',
                 repetitionDelimiter: '^',
                 segmentTerminator: '~\n',
+                subElementDelimiter: ':',
             },
         )
 
-        // Functional Group Header (Checked)
+        // Functional Group Header
         const group = document.addFunctionalGroup([
             'HC',
             `AX${this.data.federalTaxId}`,
@@ -91,14 +92,14 @@ export default class EDI837P {
             '005010X222A1',
         ])
 
-        // Transaction Set Header (Checked)
+        // Transaction Set Header
         const transaction = group.addTransaction([
             '837',
             '000000000', // Control Number
             '005010X222A1',
         ])
 
-        // Beginning of Hierarchical Transaction (Checked)
+        // Beginning of Hierarchical Transaction
         transaction.addSegment('BHT', [
             '0019',
             '00',
@@ -108,7 +109,7 @@ export default class EDI837P {
             'CH',
         ])
 
-        // [1000A] Submitter Name (Checked)
+        // [1000A] Submitter Name
         transaction.addSegment('NM1', [
             '41',
             '2',
@@ -121,7 +122,7 @@ export default class EDI837P {
             `AX${this.data.federalTaxId}`,
         ])
 
-        // [1000A] Submitter EDI Contact Information (Checked)
+        // [1000A] Submitter EDI Contact Information
         transaction.addSegment('PER', [
             'IC',
             this.data.billingProvider.name,
@@ -133,7 +134,7 @@ export default class EDI837P {
             '',
         ])
 
-        // [1000B] Receiver Name (Checked)
+        // [1000B] Receiver Name
         transaction.addSegment('NM1', [
             '40',
             '2',
@@ -146,10 +147,10 @@ export default class EDI837P {
             '316250001',
         ])
 
-        // [2000A] Hierarchical Level (Checked)
+        // [2000A] Hierarchical Level
         transaction.addSegment('HL', ['1', '', '20', ''])
 
-        // [2010AA] Billing Provider Name (Checked)
+        // [2010AA] Billing Provider Name
         transaction.addSegment('NM1', [
             '85',
             '2',
@@ -158,17 +159,17 @@ export default class EDI837P {
             '',
             '',
             '',
-            '',
+            'XX',
             this.data.npiNumber,
         ])
 
-        // [2010AA] Billing Provider Address (Checked)
+        // [2010AA] Billing Provider Address
         transaction.addSegment('N3', [
             this.data.billingProvider.address.street,
             '',
         ])
 
-        // [2010AA] Billing Provider City, State, ZIP Code (Checked)
+        // [2010AA] Billing Provider City, State, ZIP Code
         transaction.addSegment('N4', [
             this.data.billingProvider.address.city,
             this.data.billingProvider.address.state,
@@ -179,10 +180,10 @@ export default class EDI837P {
             '',
         ])
 
-        // [2010AA] Billing Provider Tax Identification (Checked)
+        // [2010AA] Billing Provider Tax Identification
         transaction.addSegment('REF', ['EI', this.data.federalTaxId])
 
-        // [2010AA] Billing Provider Contact Information (Checked)
+        // [2010AA] Billing Provider Contact Information
         transaction.addSegment('PER', [
             'IC',
             this.data.billingProvider.name,
@@ -194,13 +195,13 @@ export default class EDI837P {
             '',
         ])
 
-        // [2000B] Hierarchical Level (Checked)
+        // [2000B] Hierarchical Level
         transaction.addSegment('HL', ['2', '1', '22', ''])
 
-        // [2000B] Subscriber Information (Checked)
+        // [2000B] Subscriber Information
         transaction.addSegment('SBR', [
             'P', // ?
-            this.data.patient.relation,
+            this.data.patient.relationship,
             '',
             '',
             '',
@@ -210,7 +211,7 @@ export default class EDI837P {
             this.data.insured.type,
         ])
 
-        // [2010BA] Subscriber Name (Checked)
+        // [2010BA] Subscriber Name
         transaction.addSegment('NM1', [
             'IL',
             '1',
@@ -223,10 +224,10 @@ export default class EDI837P {
             this.data.insured.id,
         ])
 
-        // [2010BA] Subscriber Address (Checked)
+        // [2010BA] Subscriber Address
         transaction.addSegment('N3', [this.data.insured.address.street, ''])
 
-        // [2010BA] Subscriber City, State, ZIP Code (Checked)
+        // [2010BA] Subscriber City, State, ZIP Code
         transaction.addSegment('N4', [
             this.data.insured.address.city,
             this.data.insured.address.state,
@@ -237,7 +238,7 @@ export default class EDI837P {
             '',
         ])
 
-        // [2010BB] Payer Name (Checked)
+        // [2010BB] Payer Name
         transaction.addSegment('NM1', [
             'PR',
             '2',
@@ -250,12 +251,12 @@ export default class EDI837P {
             '31625',
         ])
 
-        // [2000C] Hierarchical Level (Checked)
+        // [2000C] Hierarchical Level
         transaction.addSegment('HL', ['3', '2', '23', ''])
 
-        // [2000C] Patient Information (Checked)
+        // [2000C] Patient Information
         transaction.addSegment('PAT', [
-            this.data.patient.relation,
+            this.data.patient.relationship,
             '',
             '',
             '',
@@ -266,7 +267,7 @@ export default class EDI837P {
             '',
         ])
 
-        // [2010CA] Patient Name (Checked)
+        // [2010CA] Patient Name
         transaction.addSegment('NM1', [
             'QC',
             '1',
@@ -277,19 +278,21 @@ export default class EDI837P {
             '',
         ])
 
-        // [2010CA] Patient Address (Checked)
+        // [2010CA] Patient Address
         transaction.addSegment('N3', [this.data.patient.address.street, ''])
 
-        // [2010CA] Patient City, State, ZIP Code (Checked)
+        // [2010CA] Patient City, State, ZIP Code
         transaction.addSegment('N4', [
             this.data.patient.address.city,
             this.data.patient.address.state,
             this.data.patient.address.zip,
             this.data.patient.address.country,
-            this.data.patient.address.state,
+            '',
+            '',
+            '',
         ])
 
-        // [2010CA] Patient Demographic Information (Checked)
+        // [2010CA] Patient Demographic Information
         transaction.addSegment('DMG', [
             'D8',
             toCCYYMMDD(this.data.patient.birthDate),
@@ -339,10 +342,10 @@ export default class EDI837P {
         )
 
         this.data.services.forEach((service, index) => {
-            // [2400] Service Line Number (Checked)
+            // [2400] Service Line Number
             transaction.addSegment('LX', [(index + 1).toString()])
 
-            // [2400] Professional Service (Checked)
+            // [2400] Professional Service
             transaction.addSegment('SV1', [
                 `HC:${service.procedure}:${service.modifiers.join(':')}`,
                 service.charge,
@@ -361,14 +364,14 @@ export default class EDI837P {
                 '',
             ])
 
-            // [2400] Date - Service Date (Checked)
+            // [2400] Date - Service Date
             transaction.addSegment('DTP', [
                 '472',
                 'RD8',
                 `${toCCYYMMDD(service.from)}-${toCCYYMMDD(service.to)}`,
             ])
 
-            // [2420A] Rendering Provider Name (Checked)
+            // [2420A] Rendering Provider Name
             transaction.addSegment('NM1', [
                 '82',
                 '1',
@@ -377,7 +380,7 @@ export default class EDI837P {
                 '',
                 '',
                 '',
-                '',
+                'XX',
                 service.renderingProviderId,
             ])
         })
