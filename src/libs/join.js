@@ -8,6 +8,6 @@ import edi from 'rdpcrystal-edi-library'
  */
 export default function join(documents) {
     const joiner = new edi.EDIFileJoiner()
-    joiner.FileJoinLevel = edi.FileJoinLevel.FUNCTIONALGROUP
+    joiner.FileJoinLevel = edi.FileJoinLevel.HEADER
     return joiner.join(documents)
 }
