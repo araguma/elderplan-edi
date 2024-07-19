@@ -200,7 +200,7 @@ export default class EDI837P {
 
         // [2000B] Subscriber Information
         transaction.addSegment('SBR', [
-            'P', // ?
+            'P',
             this.data.patient.relationship,
             '',
             '',
@@ -305,7 +305,7 @@ export default class EDI837P {
             this.data.totalCharge,
             '',
             '',
-            '', // Required
+            '12:B:1',
             'N',
             'C',
             'Y',
@@ -349,11 +349,11 @@ export default class EDI837P {
             transaction.addSegment('SV1', [
                 `HC:${service.procedure}:${service.modifiers.join(':')}`,
                 service.charge,
-                'UN', // ?
+                'UN',
                 service.count,
                 service.place,
                 '',
-                '', // Required
+                '1',
                 '',
                 '',
                 '',
